@@ -163,7 +163,4 @@ run('utilities/generateFlightCode.m')
 
 ---
 
-## Authors
 
-**Harsh Padmalwar**  
-**Atharv Kulkarni**
