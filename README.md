@@ -1,26 +1,72 @@
 # Minidrone Autonomous Landing
 
-Autonomous flight system for the Parrot Mambo minidrone that navigates a competition course and lands precisely on a moving colored target. Fully designed, tuned, and simulated in MATLAB/Simulink, with code generation for real hardware deployment.
+Autonomous flight system for the Parrot Mambo minidrone that follows a color-marked path and lands on a moving wheeled target. Fully designed, simulated, and deployed in MATLAB/Simulink with generated C code running directly on the drone hardware.
 
 ---
 
 ## Demo
 
-https://github.com/Hp092/minidrone-autonomous-landing/blob/main/demo.mp4
+<p align="center">
+  <img src="media/demo.gif" width="320" alt="Minidrone autonomously landing on moving target"/>
+</p>
 
 ---
 
-## Overview
+## Moving Target
 
-The drone takes off, follows a pre-defined waypoint trajectory, and autonomously lands on a moving platform identified by color using the onboard downward-facing camera. The controller is built on a cascaded PID architecture using a linearized state-space airframe model, with an IMU Kalman filter and complementary filter for attitude estimation.
+The landing platform is a motorized wheeled cart with a green surface. The drone uses its downboard camera to detect the green color, follow the platform, and descend onto it.
 
-| Capability | Details |
+<p align="center">
+  <img src="media/target_platform.jpeg" width="360" alt="Moving target platform"/>
+</p>
+
+---
+
+## System Architecture
+
+The top-level model feeds flight commands and sensor data into the `flightControlSystem`, which runs the image processing and control loops, then drives the nonlinear airframe simulation.
+
+<p align="center">
+  <img src="media/simulink_top_level.png" width="720" alt="Top-level Simulink model"/>
+</p>
+
+---
+
+## Flight Control System
+
+The flight controller has three inputs: trajectory commands, sensor data, and raw camera image. The **Image Processing System** converts the camera feed into a binary mask and passes it to the **Control System**, which computes per-motor commands.
+
+<p align="center">
+  <img src="media/flight_control_system.png" width="720" alt="Flight control system Simulink diagram"/>
+</p>
+
+---
+
+## Image Processing Pipeline
+
+The downward camera frame is converted from Parrot raw format to RGB, then a `createMask` MATLAB function thresholds the green color channel. The binary output is divided into **9 spatial zones** (Top/Mid/Bot × Left/Centre/Right), giving the controller directional awareness of where the target is relative to the drone.
+
+<p align="center">
+  <img src="media/image_processing_pipeline.png" width="720" alt="Image processing pipeline"/>
+</p>
+
+---
+
+## Navigation State Machine
+
+A Stateflow chart uses the 9-zone binary mask to decide motion. The drone starts in **Forward** and transitions between **TurnLeft**, **TurnRight**, and **Backward** based on which zones contain green. The altitude reference `z` increments by `Land * 0.005` each step — the drone descends gradually as it centers over the target until landing.
+
+<p align="center">
+  <img src="media/navigation_stateflow.png" width="640" alt="Navigation Stateflow state machine"/>
+</p>
+
+| State | Condition |
 |---|---|
-| Takeoff & altitude hold | Barometric + sonar altitude KF |
-| Attitude control | Cascaded PID on linearized state-space model |
-| Waypoint tracking | Pre-defined competition trajectory |
-| Target detection | Color sensing via downward camera |
-| Autonomous landing | Vision-guided descent onto moving colored target |
+| Forward | Target centered (TC active, MC clear) |
+| TurnRight | Target to the right (BL or TR active, MC clear) |
+| TurnLeft | Target to the left (TL active, MC clear) |
+| Backward | Target behind center (BC active, TC clear) |
+| Land | TC active, centered — descend |
 
 ---
 
@@ -30,6 +76,7 @@ The drone takes off, follows a pre-defined waypoint trajectory, and autonomously
 |---|---|
 | Platform | Parrot Mambo minidrone |
 | Sensors | IMU (accel + gyro), barometer, sonar, downward camera |
+| Moving target | Motorized wheeled cart with green landing surface |
 | Interface | MATLAB Aerospace Toolbox — Parrot support package |
 
 ---
@@ -39,24 +86,11 @@ The drone takes off, follows a pre-defined waypoint trajectory, and autonomously
 | Layer | Technology |
 |---|---|
 | Modeling & simulation | MATLAB / Simulink |
+| Vision | Color thresholding, 9-zone spatial segmentation |
+| Navigation logic | Simulink Stateflow state machine |
 | Control design | Linearized state-space, cascaded PID |
 | State estimation | IMU Kalman filter, complementary filter, altitude KF |
-| Airframe models | Linear and nonlinear Simulink models |
-| Trajectory planning | Competition Track Builder MATLAB app (`drone_track_builder.mlapp`) |
 | Flight code generation | Simulink Coder → Parrot target |
-
----
-
-## Control Architecture
-
-The flight controller uses a cascaded structure:
-
-1. **Outer loop** — position and altitude reference tracking (waypoints → attitude setpoints)
-2. **Inner loop** — attitude and rate control (PID on roll, pitch, yaw)
-3. **Control mixer** — maps thrust/torque demands to per-motor commands via `Ts2Q` matrix
-4. **State estimator** — Kalman filter on IMU data for angle and rate estimates; separate KF for altitude fusing barometer and sonar
-
-Motor thrust is clipped to 92% of maximum to retain attitude control headroom at full throttle.
 
 ---
 
@@ -88,8 +122,16 @@ minidrone-autonomous-landing/
 │   ├── startVars.m                  # Project startup script
 │   ├── generateFlightCode.m         # Code generation script
 │   └── drone_track_builder.mlapp    # Competition track builder app
+├── media/
+│   ├── demo.gif                     # Flight demo
+│   ├── target_platform.jpeg         # Moving target hardware
+│   ├── simulink_top_level.png       # Top-level model diagram
+│   ├── flight_control_system.png    # FCS diagram
+│   ├── image_processing_pipeline.png
+│   └── navigation_stateflow.png
 ├── support/                         # 3D visualization assets (VRML)
-├── demo.mp4                         # Flight demonstration
+├── demo.mp4                         # Full flight demo video
+├── report.docx                      # Project report
 └── MinidroneCompetition.prj         # MATLAB project file
 ```
 
@@ -106,13 +148,10 @@ open('MinidroneCompetition.prj')
 % 2. Initialize workspace variables
 run('utilities/startVars.m')
 
-% 3. (Optional) Edit the competition trajectory
-openTrackBuilder()
-
-% 4. Open the main simulation model
+% 3. Open the main simulation model
 open_system('mainModels/parrotMinidroneCompetition.slx')
 
-% 5. Run the simulation
+% 4. Run the simulation
 sim('mainModels/parrotMinidroneCompetition.slx')
 ```
 
