@@ -50,6 +50,12 @@ The downward camera frame is converted from Parrot raw format to RGB, then a `cr
   <img src="media/image_processing_pipeline.png" width="720" alt="Image processing pipeline"/>
 </p>
 
+The left window shows the raw RGB camera feed; the right shows the binary mask output — the target isolated as a white blob on black.
+
+<p align="center">
+  <img src="media/color_detection.jpeg" width="720" alt="Live color detection — RGB feed and binary mask"/>
+</p>
+
 ---
 
 ## Navigation State Machine
